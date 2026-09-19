@@ -10,7 +10,7 @@ on:
 
 env:
   AWS_REGION: ap-south-1
-  ECR_REPOSITORY: yojana-frontend
+  ECR_REPOSITORY: yojna-frontend
 
 jobs:
   build-and-push:
