@@ -1,9 +1,10 @@
 # syntax=docker/dockerfile:1
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package*.json ./
+COPY frontend/package*.json ./
 RUN npm ci
-COPY . .
+COPY frontend/ .
+COPY data/ /data/
 # vocabulary.json is imported at build time through the @data alias, so the
 # data directory has to be present in the build context.
 RUN npm run build
