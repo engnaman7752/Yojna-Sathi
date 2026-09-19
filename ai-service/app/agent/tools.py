@@ -39,6 +39,37 @@ def _facts(**kwargs: Any) -> dict:
 
 
 @tool
+async def search_knowledge_base(query: str, state: str | None = None) -> dict:
+    """Search the Knowledge Base of official scheme PDFs to answer questions.
+    
+    Use this tool whenever the user asks for details, required documents, 
+    benefits, or any non-eligibility questions about a scheme (e.g. 'What are 
+    the benefits of PM Kisan?'). The tool returns verbatim excerpts from the 
+    published documents.
+    """
+    import chromadb
+    from app.rag.retriever import ChromaRetriever
+    from app.providers.embeddings import embedding_model
+    from app import config
+
+    try:
+        client = chromadb.PersistentClient(path=str(config.DATA_DIR / "chroma"))
+        embedder = embedding_model()
+        retriever = ChromaRetriever(client, embedder=embedder)
+        
+        passages = retriever.search(query, state=state, top_k=3)
+        if not passages:
+            return _ok("No relevant information found in the official knowledge base.")
+            
+        results = []
+        for p in passages:
+            results.append(f"--- Document: {p.scheme_id} (Page {p.page}) ---\n{p.text}")
+            
+        return _ok("\n\n".join(results))
+    except Exception as e:
+        return _ok(f"Failed to search knowledge base: {str(e)}")
+
+@tool
 async def check_eligibility(
     state: str,
     district: str,
@@ -174,4 +205,4 @@ async def get_scheme_details(schemeId: str) -> dict:
         return _failed(e)
 
 
-ALL_TOOLS = [check_eligibility, save_profile, evaluate_household, get_scheme_details]
+ALL_TOOLS = [check_eligibility, save_profile, evaluate_household, get_scheme_details, search_knowledge_base]

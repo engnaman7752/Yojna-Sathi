@@ -1,6 +1,8 @@
 package in.yojanasaathi.eligibility.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRawValue;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -18,7 +20,7 @@ import java.util.Set;
 public record Condition(
         String id,
         String label,
-        String ruleJson,
+        @JsonProperty("rule") @JsonRawValue String ruleJson,
         Evidence evidence,
         @JsonIgnore Set<String> referencedFields) {
 

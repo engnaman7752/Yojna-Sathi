@@ -2,12 +2,6 @@ import { useMemo, useState } from "react";
 import type { HouseholdFacts } from "../api/types";
 import { FIELD_NAMES, isSupplied, labelFor, unitSuffix, vocabulary } from "../vocabulary";
 
-/**
- * One field the person changed after the agent extracted it. Phase 9 uses these
- * to measure extraction quality, so the shape is deliberately explicit: what
- * was extracted, what it was changed to, and whether the agent had proposed
- * anything at all.
- */
 export interface FieldCorrection {
   field: string;
   extracted: string | number | boolean | null;
@@ -38,11 +32,6 @@ function toInput(value: unknown): string {
   return String(value);
 }
 
-/**
- * Shows what the agent understood and lets the person correct it before
- * anything is decided. Every field comes from data/vocabulary.json, so the form
- * cannot offer a field the rule engine would reject.
- */
 export function FactConfirmation({ extracted, onConfirm, submitLabel = "Confirm" }: FactConfirmationProps) {
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(FIELD_NAMES.map((f) => [f, toInput(extracted[f])])),
@@ -78,56 +67,73 @@ export function FactConfirmation({ extracted, onConfirm, submitLabel = "Confirm"
   }
 
   return (
-    <form onSubmit={submit} aria-label="Confirm your details">
-      <p>Please check these details. Change anything that is wrong.</p>
-      {FIELD_NAMES.map((field) => {
-        const spec = vocabulary.fields[field];
-        const wasCorrected = correctedFields.has(field);
-        const inputId = `fact-${field}`;
-        return (
-          <div key={field} data-testid={`field-${field}`} data-corrected={wasCorrected ? "true" : "false"}>
-            <label htmlFor={inputId}>
-              {labelFor(field)} {unitSuffix(field) && <span>({unitSuffix(field)})</span>}
-              {wasCorrected && <span data-testid={`corrected-${field}`}> — you changed this</span>}
-            </label>
-            {spec.type === "enum" ? (
-              <select
-                id={inputId}
-                value={values[field]}
-                onChange={(e) => setValues({ ...values, [field]: e.target.value })}
-              >
-                <option value="">Not said</option>
-                {spec.values?.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            ) : spec.type === "boolean" ? (
-              <select
-                id={inputId}
-                value={values[field]}
-                onChange={(e) => setValues({ ...values, [field]: e.target.value })}
-              >
-                <option value="">Not said</option>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            ) : (
-              <input
-                id={inputId}
-                type={spec.type === "integer" ? "number" : "text"}
-                inputMode={spec.type === "integer" ? "numeric" : undefined}
-                value={values[field]}
-                min={spec.min}
-                max={spec.max}
-                onChange={(e) => setValues({ ...values, [field]: e.target.value })}
-              />
-            )}
-          </div>
-        );
-      })}
-      <button type="submit">{submitLabel}</button>
+    <form onSubmit={submit} aria-label="Confirm your details" className="fact-form">
+      <p className="fact-form-desc">
+        Please check these details. Change anything that is wrong.
+      </p>
+      <div className="fact-grid">
+        {FIELD_NAMES.map((field) => {
+          const spec = vocabulary.fields[field];
+          const wasCorrected = correctedFields.has(field);
+          const inputId = `fact-${field}`;
+          return (
+            <div
+              key={field}
+              className={`form-group ${wasCorrected ? "fact-corrected" : ""}`}
+              data-testid={`field-${field}`}
+              data-corrected={wasCorrected ? "true" : "false"}
+            >
+              <label htmlFor={inputId} className="form-label">
+                {labelFor(field)}
+                {unitSuffix(field) && <span className="fact-unit"> ({unitSuffix(field)})</span>}
+                {wasCorrected && (
+                  <span className="fact-changed-badge" data-testid={`corrected-${field}`}>
+                    changed
+                  </span>
+                )}
+              </label>
+              {spec.type === "enum" ? (
+                <select
+                  id={inputId}
+                  className="form-select"
+                  value={values[field]}
+                  onChange={(e) => setValues({ ...values, [field]: e.target.value })}
+                >
+                  <option value="">Not said</option>
+                  {spec.values?.map((v) => (
+                    <option key={v} value={v}>{v}</option>
+                  ))}
+                </select>
+              ) : spec.type === "boolean" ? (
+                <select
+                  id={inputId}
+                  className="form-select"
+                  value={values[field]}
+                  onChange={(e) => setValues({ ...values, [field]: e.target.value })}
+                >
+                  <option value="">Not said</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              ) : (
+                <input
+                  id={inputId}
+                  className="form-input"
+                  type={spec.type === "integer" ? "number" : "text"}
+                  inputMode={spec.type === "integer" ? "numeric" : undefined}
+                  value={values[field]}
+                  min={spec.min}
+                  max={spec.max}
+                  onChange={(e) => setValues({ ...values, [field]: e.target.value })}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <button type="submit" className="btn btn-primary" style={{ width: "100%", marginTop: "var(--sp-4)" }}>
+        {submitLabel}
+      </button>
     </form>
   );
 }

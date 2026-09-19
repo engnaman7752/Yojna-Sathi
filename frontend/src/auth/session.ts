@@ -1,4 +1,4 @@
-export type Role = "CITIZEN" | "CSC_OPERATOR" | "DISTRICT_OFFICER" | "ADMIN";
+export type Role = "CITIZEN" | "CSC_OPERATOR" | "VILLAGE_OFFICER" | "BLOCK_OFFICER" | "DISTRICT_OFFICER" | "ADMIN";
 
 export interface Session {
   token: string;
@@ -9,6 +9,14 @@ export interface Session {
    */
   displayRole: Role;
   displayName: string;
+  /**
+   * True when this session's token came from the local mock fallback rather
+   * than a real response from the backend's /api/dev/auth endpoint (it was
+   * unreachable, or returned an error). A mock session looks signed-in but
+   * every real feature behind it — chat, eligibility checks, dashboards —
+   * will fail, so the UI must say so rather than pretend everything works.
+   */
+  mock?: boolean;
 }
 
 const KEY = "yojana.session";

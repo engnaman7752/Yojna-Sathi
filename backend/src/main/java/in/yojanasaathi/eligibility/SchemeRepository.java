@@ -60,6 +60,11 @@ public class SchemeRepository {
 
     @PostConstruct
     void loadFromDisk() {
+        reload();
+    }
+
+    public synchronized void reload() {
+        versions.clear();
         Path dir = Path.of(properties.data().dir()).resolve(SCHEMES_SUBDIR);
         if (!Files.isDirectory(dir)) {
             log.warn("No scheme directory at {} - no schemes loaded. "
@@ -167,7 +172,7 @@ public class SchemeRepository {
     }
 
     private Condition parseCondition(JsonNode node, int index, Set<String> seenIds,
-                                     String schemeId, int version, Path file) {
+            String schemeId, int version, Path file) {
         String where = "scheme " + schemeId + " v" + version + ", condition[" + index + "] in " + file.getFileName();
 
         if (node == null || !node.isObject()) {

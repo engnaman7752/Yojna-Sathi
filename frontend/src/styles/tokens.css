@@ -1,0 +1,169 @@
+/* ===== YOJANA SAATHI — WARM DESIGN TOKENS ===== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ── Gradient Palette ── */
+  --gradient-hero: linear-gradient(135deg, #fffaf0 0%, #fef3c7 50%, #fde68a 100%);
+  --gradient-card: linear-gradient(145deg, rgba(234, 88, 12, 0.03) 0%, rgba(246, 158, 27, 0.02) 100%);
+  --gradient-btn: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  --gradient-btn-hover: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+  --gradient-glow: radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(249, 115, 22, 0.1), transparent 40%);
+
+  /* ── Core Colors ── */
+  --bg-base: #fafaf9;
+  /* Warm off-white */
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.85);
+
+  --text-primary: #1c1917;
+  /* Very dark warm gray */
+  --text-secondary: #57534e;
+  --text-muted: #78716c;
+  --text-accent: #ea580c;
+
+  /* ── Primary (Saffron / Warm Orange) ── */
+  --primary-50: #fff7ed;
+  --primary-100: #ffedd5;
+  --primary-400: #fb923c;
+  --primary-500: #f97316;
+  --primary-600: #ea580c;
+  --primary-700: #c2410c;
+
+  /* ── Secondary (Ashoka Blue — staff / official contexts) ── */
+  --secondary-50: #eff6ff;
+  --secondary-100: #dbeafe;
+  --secondary-400: #3b82f6;
+  --secondary-500: #2563eb;
+  --secondary-600: #1d4ed8;
+  --secondary-700: #1e3a8a;
+
+  /* ── Neutral (admin — deliberately calm, not alarming) ── */
+  --neutral-100: #f1f5f9;
+  --neutral-400: #94a3b8;
+  --neutral-500: #64748b;
+  --neutral-700: #334155;
+
+  /* ── Semantic ── */
+  --success: #15803d;
+  /* Deeper Green */
+  --success-bg: #dcfce7;
+  --danger: #b91c1c;
+  /* Deeper Red */
+  --danger-bg: #fee2e2;
+  --warning: #b45309;
+  --warning-bg: #fef3c7;
+
+  /* ── Borders ── */
+  --border: #e7e5e4;
+  --border-hover: #fdba74;
+  --border-focus: var(--primary-500);
+
+  /* ── Spacing & Radii ── */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.25rem;
+  --sp-6: 1.5rem;
+  --sp-8: 2rem;
+  --sp-10: 2.5rem;
+  --sp-12: 3rem;
+
+  --r-sm: 0.375rem;
+  --r-md: 0.5rem;
+  --r-lg: 0.75rem;
+  --r-xl: 1.25rem;
+  --r-2xl: 1.5rem;
+  --r-full: 9999px;
+
+  /* ── Typography ── */
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-hindi: 'Noto Sans Devanagari', sans-serif;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.875rem;
+  --fs-base: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.5rem;
+  --fs-3xl: 1.875rem;
+  --fs-4xl: 2.25rem;
+  --fs-5xl: 3rem;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 20px rgba(249, 115, 22, 0.15);
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration: 200ms;
+  --target-min: 44px;
+}
+
+/* Force light mode aesthetics always */
+body {
+  font-family: var(--font-sans), var(--font-hindi);
+  font-size: var(--fs-base);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+::selection {
+  background: var(--primary-100);
+  color: var(--primary-700);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}

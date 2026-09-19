@@ -2,11 +2,14 @@
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "gemini")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash")
+GEMINI_CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-3.6-flash")
 
 BEDROCK_CHAT_MODEL_ID = os.getenv("BEDROCK_CHAT_MODEL_ID")
 AWS_REGION = os.getenv("AWS_REGION", "ap-south-1")
