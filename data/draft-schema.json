@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yojanasaathi.in/schemas/scheme-draft.v1.json",
+  "title": "Scheme draft produced by extraction",
+  "description": "The ONLY shape the model may return. Structure is checked here; the four rules JSON Schema cannot express are listed under x-validator-rules and belong to DraftValidator on the backend. Nothing in a draft is trusted: a draft is a proposal for a human to approve.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemeId", "name", "state", "conditions", "unmappedConditions"],
+  "properties": {
+    "schemeId": {"type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "name": {"type": "string", "minLength": 1},
+    "state": {"type": "string", "minLength": 1,
+              "description": "A state name, or ALL for a central scheme."},
+    "conditions": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "rule", "evidence", "confidence"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9-]*$"},
+          "label": {"type": "string", "minLength": 1,
+                    "description": "What a citizen is shown when this condition fails."},
+          "rule": {"type": "object", "minProperties": 1,
+                   "description": "JSON Logic returning true or false. Exclusions are expressed positively: 'not an income tax payer' is paysIncomeTax == false, never a negated scheme."},
+          "evidence": {"$ref": "#/$defs/evidence"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    },
+    "unmappedConditions": {
+      "type": "array",
+      "description": "Everything the document requires that the field vocabulary cannot express. Putting a requirement here is correct behaviour, not failure; inventing a field to avoid it is the failure.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "reason", "evidence"],
+        "properties": {
+          "text": {"type": "string", "minLength": 1,
+                   "description": "The requirement, in the document's own words."},
+          "reason": {"type": "string", "minLength": 1,
+                     "description": "Why it cannot be expressed, e.g. 'BPL card status is not in the vocabulary'."},
+          "evidence": {"$ref": "#/$defs/evidence"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["docId", "page", "quote"],
+      "properties": {
+        "docId": {"type": "string", "minLength": 1},
+        "page": {"type": "integer", "minimum": 1,
+                 "description": "1-based, matching page_text.py output."},
+        "quote": {"type": "string", "minLength": 1, "maxLength": 200,
+                  "description": "Verbatim excerpt, at most 15 words."}
+      }
+    }
+  },
+  "x-validator-rules": [
+    "Every var referenced by a rule must appear in data/vocabulary.json. A rule naming any other field is rejected, not warned about.",
+    "Every rule must parse as JSON Logic and evaluate to a boolean against a complete household. A rule that throws or returns a non-boolean is rejected.",
+    "evidence.page must be between 1 and the document's page count. A citation past the end of the document is rejected.",
+    "evidence.quote must be at most 15 words and must appear verbatim in that page's extracted text. A quote that is not on the page it cites is rejected.",
+    "WARNING, not rejection: confidence below 0.7 on any condition.",
+    "WARNING, not rejection: a non-empty unmappedConditions list. Publishing is blocked until each entry is resolved as mapped-to-a-new-field, manual-check, or dismissed."
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "groups": [
+    {
+      "name": "yojana",
+      "type": "in.yojanasaathi.config.YojanaProperties",
+      "sourceType": "in.yojanasaathi.config.YojanaProperties"
+    },
+    {
+      "name": "yojana.data",
+      "type": "in.yojanasaathi.config.YojanaProperties$Data",
+      "sourceType": "in.yojanasaathi.config.YojanaProperties",
+      "sourceMethod": "public in.yojanasaathi.config.YojanaProperties.Data data() "
+    },
+    {
+      "name": "yojana.eligibility",
+      "type": "in.yojanasaathi.config.YojanaProperties$Eligibility",
+      "sourceType": "in.yojanasaathi.config.YojanaProperties",
+      "sourceMethod": "public in.yojanasaathi.config.YojanaProperties.Eligibility eligibility() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "yojana.data.dir",
+      "type": "java.lang.String",
+      "sourceType": "in.yojanasaathi.config.YojanaProperties$Data",
+      "defaultValue": "..\/data"
+    },
+    {
+      "name": "yojana.eligibility.missing-field-policy",
+      "type": "in.yojanasaathi.eligibility.MissingFieldPolicy",
+      "sourceType": "in.yojanasaathi.config.YojanaProperties$Eligibility",
+      "defaultValue": "STRICT"
+    }
+  ],
+  "hints": [],
+  "ignored": {
+    "properties": []
+  }
+}

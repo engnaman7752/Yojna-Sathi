@@ -1,0 +1,43 @@
+// Yojana Saathi authorization model.
+//
+// Two things are deliberately NOT in this schema, because they are decided in
+// Java before the request is ever built:
+//   - a user's role and district are read from DynamoDB at decision time, never
+//     from a JWT claim, so a transferred officer loses access immediately;
+//   - consentedOperators holds only unexpired consent rows, so an expired
+//     consent cannot grant access even if DynamoDB TTL has not yet swept it.
+
+namespace YojanaSaathi {
+
+    // CITIZEN, CSC_OPERATOR, DISTRICT_OFFICER, ADMIN. Membership is a parent
+    // edge so policies can say "principal in Role::..." rather than comparing
+    // strings, which the validator can then check.
+    entity Role;
+
+    entity User in [Role] {
+        role: String,
+        district: String,
+    };
+
+    entity Household {
+        owner: User,
+        registeredBy?: User,
+        district: String,
+        consentedOperators: Set<User>,
+    };
+
+    entity SchemeVersion {
+        schemeId: String,
+        status: String,
+        drafter: User,
+        editors: Set<User>,
+    };
+
+    action "ViewHousehold", "UpdateHousehold", "CheckEligibility", "ViewAccessLog",
+           "GrantConsent", "RevokeConsent", "RegisterHousehold"
+        appliesTo { principal: [User], resource: [Household] };
+
+    action "CreateSchemeDraft", "EditSchemeDraft", "PublishSchemeVersion",
+           "RejectSchemeVersion"
+        appliesTo { principal: [User], resource: [SchemeVersion] };
+}

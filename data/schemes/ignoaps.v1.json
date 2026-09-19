@@ -1,0 +1,21 @@
+{
+  "_draft": true,
+  "_provenance": "Drafted by Claude from NSAP guidance (IGNOAPS). UNVERIFIED. The BPL test is an income proxy - see DRAFT_NOTICE.md.",
+  "schemeId": "ignoaps",
+  "name": "Indira Gandhi National Old Age Pension Scheme (IGNOAPS)",
+  "state": "ALL",
+  "version": 1,
+  "status": "PUBLISHED",
+  "conditions": [
+    {
+      "id": "age-60-or-older",
+      "label": "The applicant must be 60 years of age or older",
+      "rule": { ">=": [ { "var": "age" }, 60 ] }
+    },
+    {
+      "id": "below-poverty-line",
+      "label": "The household must be below the poverty line",
+      "rule": { "<=": [ { "var": "annualIncome" }, 100000 ] }
+    }
+  ]
+}

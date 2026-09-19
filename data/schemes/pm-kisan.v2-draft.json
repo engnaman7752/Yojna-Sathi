@@ -1,0 +1,31 @@
+{
+  "_draft": true,
+  "_provenance": "Deliberate DRAFT version used to prove that an unpublished version is never evaluated. Adds a 2-hectare land ceiling that version 1 does not have.",
+  "schemeId": "pm-kisan",
+  "name": "Pradhan Mantri Kisan Samman Nidhi (PM-KISAN)",
+  "state": "ALL",
+  "version": 2,
+  "status": "DRAFT",
+  "conditions": [
+    {
+      "id": "owns-cultivable-land",
+      "label": "The family must own cultivable land in the official land records",
+      "rule": { "==": [ { "var": "ownsCultivableLand" }, true ] }
+    },
+    {
+      "id": "not-an-income-tax-payer",
+      "label": "No family member may have paid income tax in the last assessment year",
+      "rule": { "==": [ { "var": "paysIncomeTax" }, false ] }
+    },
+    {
+      "id": "pension-below-10000",
+      "label": "Retired government pensioners drawing 10,000 rupees a month or more are excluded",
+      "rule": { "<": [ { "var": "monthlyPension" }, 10000 ] }
+    },
+    {
+      "id": "land-ceiling-2-hectares",
+      "label": "Landholding must not exceed 2 hectares (20,000 square metres)",
+      "rule": { "<=": [ { "var": "landAreaSqm" }, 20000 ] }
+    }
+  ]
+}

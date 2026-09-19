@@ -1,0 +1,136 @@
+{
+  "_draft": true,
+  "_provenance": "Drafted by Claude alongside data/schemes/. The expectedEligible sets were reasoned by hand from the drafted rules, then checked for consistency against them. They encode no independent knowledge of the real schemes - review before trusting.",
+  "cases": [
+    {
+      "id": "widow-63-bihar-bpl",
+      "description": "Widow of 63 in Bihar, below poverty line, no land, no pension",
+      "facts": {
+        "state": "BIHAR", "district": "PATNA",
+        "annualIncome": 48000, "monthlyPension": 0,
+        "ownsCultivableLand": false, "landAreaSqm": 0,
+        "paysIncomeTax": false, "socialCategory": "OBC",
+        "age": 63, "gender": "F", "maritalStatus": "WIDOWED",
+        "disabilityPercent": 0
+      },
+      "expectedEligible": ["bihar-mvpy", "ignoaps", "ignwps"]
+    },
+    {
+      "id": "farmer-45-uttar-pradesh",
+      "description": "Working-age landholding farmer in UP; the Bihar scheme must not even be evaluated",
+      "facts": {
+        "state": "UTTAR PRADESH", "district": "VARANASI",
+        "annualIncome": 180000, "monthlyPension": 0,
+        "ownsCultivableLand": true, "landAreaSqm": 12000,
+        "paysIncomeTax": false, "socialCategory": "OBC",
+        "age": 45, "gender": "M", "maritalStatus": "MARRIED",
+        "disabilityPercent": 0
+      },
+      "expectedEligible": ["pm-kisan"]
+    },
+    {
+      "id": "sc-student-class-11-madhya-pradesh",
+      "description": "SC student in class 11 within the income ceiling",
+      "facts": {
+        "state": "MADHYA PRADESH", "district": "BHOPAL",
+        "annualIncome": 90000, "monthlyPension": 0,
+        "ownsCultivableLand": false, "landAreaSqm": 0,
+        "paysIncomeTax": false, "socialCategory": "SC",
+        "age": 16, "gender": "M", "maritalStatus": "SINGLE",
+        "disabilityPercent": 0, "studentClass": 11
+      },
+      "expectedEligible": ["post-matric-sc-st"]
+    },
+    {
+      "id": "taxpaying-farmer-50-punjab",
+      "description": "Owns land but pays income tax, so PM-KISAN excludes him",
+      "facts": {
+        "state": "PUNJAB", "district": "LUDHIANA",
+        "annualIncome": 900000, "monthlyPension": 0,
+        "ownsCultivableLand": true, "landAreaSqm": 30000,
+        "paysIncomeTax": true, "socialCategory": "GEN",
+        "age": 50, "gender": "M", "maritalStatus": "MARRIED",
+        "disabilityPercent": 0
+      },
+      "expectedEligible": []
+    },
+    {
+      "id": "severely-disabled-30-odisha",
+      "description": "ST adult with 85 percent disability; qualifies for the disability pension only",
+      "facts": {
+        "state": "ODISHA", "district": "CUTTACK",
+        "annualIncome": 60000, "monthlyPension": 0,
+        "ownsCultivableLand": false, "landAreaSqm": 0,
+        "paysIncomeTax": false, "socialCategory": "ST",
+        "age": 30, "gender": "M", "maritalStatus": "SINGLE",
+        "disabilityPercent": 85
+      },
+      "expectedEligible": ["igndps"]
+    },
+    {
+      "id": "pensioner-65-bihar",
+      "description": "Already draws 12,000 a month, which excludes him from all three pension routes",
+      "facts": {
+        "state": "BIHAR", "district": "GAYA",
+        "annualIncome": 240000, "monthlyPension": 12000,
+        "ownsCultivableLand": true, "landAreaSqm": 8000,
+        "paysIncomeTax": false, "socialCategory": "GEN",
+        "age": 65, "gender": "M", "maritalStatus": "MARRIED",
+        "disabilityPercent": 0
+      },
+      "expectedEligible": []
+    },
+    {
+      "id": "widow-38-rajasthan-below-age-band",
+      "description": "Boundary: one year under the widow pension age band of 40",
+      "facts": {
+        "state": "RAJASTHAN", "district": "JAIPUR",
+        "annualIncome": 55000, "monthlyPension": 0,
+        "ownsCultivableLand": false, "landAreaSqm": 0,
+        "paysIncomeTax": false, "socialCategory": "SC",
+        "age": 38, "gender": "F", "maritalStatus": "WIDOWED",
+        "disabilityPercent": 0
+      },
+      "expectedEligible": []
+    },
+    {
+      "id": "widow-40-rajasthan-at-age-band",
+      "description": "Boundary: exactly 40, which the widow pension band includes",
+      "facts": {
+        "state": "RAJASTHAN", "district": "JAIPUR",
+        "annualIncome": 55000, "monthlyPension": 0,
+        "ownsCultivableLand": false, "landAreaSqm": 0,
+        "paysIncomeTax": false, "socialCategory": "SC",
+        "age": 40, "gender": "F", "maritalStatus": "WIDOWED",
+        "disabilityPercent": 0
+      },
+      "expectedEligible": ["ignwps"]
+    },
+    {
+      "id": "st-student-class-10-jharkhand",
+      "description": "Boundary: class 10 is below the post-matric stage",
+      "facts": {
+        "state": "JHARKHAND", "district": "RANCHI",
+        "annualIncome": 70000, "monthlyPension": 0,
+        "ownsCultivableLand": false, "landAreaSqm": 0,
+        "paysIncomeTax": false, "socialCategory": "ST",
+        "age": 15, "gender": "F", "maritalStatus": "SINGLE",
+        "disabilityPercent": 0, "studentClass": 10
+      },
+      "expectedEligible": []
+    },
+    {
+      "id": "farmer-35-bihar-above-draft-land-ceiling",
+      "description": "Holds 2.5 hectares. PM-KISAN version 2 is a DRAFT that would exclude him; because it is not published, version 1 applies and he qualifies.",
+      "facts": {
+        "state": "BIHAR", "district": "BHAGALPUR",
+        "annualIncome": 150000, "monthlyPension": 0,
+        "ownsCultivableLand": true, "landAreaSqm": 25000,
+        "paysIncomeTax": false, "socialCategory": "OBC",
+        "age": 35, "gender": "M", "maritalStatus": "MARRIED",
+        "disabilityPercent": 0
+      },
+      "expectedEligible": ["pm-kisan"]
+    }
+  ]
+}

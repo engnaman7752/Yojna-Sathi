@@ -1,0 +1,101 @@
+{
+  "vocabularyVersion": 1,
+  "note": "Single source of truth for the fields that may appear in a scheme rule and in household facts. Derived from PROJECT_BRIEF.md. Money is in whole rupees, land is in square metres, no decimals anywhere. Nothing outside 'fields' may appear in a rule; the scheme loader rejects any rule that references an unknown field.",
+  "reservedValues": {
+    "state": {
+      "ALL": "Reserved marker on a SchemeVersion meaning a central (all-India) scheme. It is never a valid value for a household's state."
+    }
+  },
+  "fields": {
+    "state": {
+      "type": "string",
+      "unit": null,
+      "required": true,
+      "description": "State or union territory of residence. Compared case-insensitively against a scheme's state."
+    },
+    "district": {
+      "type": "string",
+      "unit": null,
+      "required": true,
+      "description": "District of residence."
+    },
+    "annualIncome": {
+      "type": "integer",
+      "unit": "INR_PER_YEAR",
+      "min": 0,
+      "required": false,
+      "description": "Total household income per year, in whole rupees."
+    },
+    "monthlyPension": {
+      "type": "integer",
+      "unit": "INR_PER_MONTH",
+      "min": 0,
+      "required": false,
+      "description": "Government pension already received per month, in whole rupees. 0 means none; absent means not known."
+    },
+    "ownsCultivableLand": {
+      "type": "boolean",
+      "unit": null,
+      "required": false,
+      "description": "Whether the household owns cultivable agricultural land."
+    },
+    "landAreaSqm": {
+      "type": "integer",
+      "unit": "SQM",
+      "min": 0,
+      "required": false,
+      "description": "Area of land held, in whole square metres. 1 acre = 4047 sqm, 1 hectare = 10000 sqm."
+    },
+    "paysIncomeTax": {
+      "type": "boolean",
+      "unit": null,
+      "required": false,
+      "description": "Whether any member of the household paid income tax in the last assessment year."
+    },
+    "socialCategory": {
+      "type": "enum",
+      "values": ["GEN", "OBC", "SC", "ST"],
+      "unit": null,
+      "required": false,
+      "description": "Social category of the household."
+    },
+    "age": {
+      "type": "integer",
+      "unit": "YEARS",
+      "min": 0,
+      "max": 120,
+      "required": false,
+      "description": "Age in completed years of the household member the check is about."
+    },
+    "gender": {
+      "type": "enum",
+      "values": ["M", "F", "O"],
+      "unit": null,
+      "required": false,
+      "description": "Gender of the household member the check is about."
+    },
+    "maritalStatus": {
+      "type": "enum",
+      "values": ["SINGLE", "MARRIED", "WIDOWED", "DIVORCED"],
+      "unit": null,
+      "required": false,
+      "description": "Marital status of the household member the check is about."
+    },
+    "disabilityPercent": {
+      "type": "integer",
+      "unit": "PERCENT",
+      "min": 0,
+      "max": 100,
+      "required": false,
+      "description": "Certified disability percentage. 0 means none; absent means not known."
+    },
+    "studentClass": {
+      "type": "integer",
+      "unit": "CLASS",
+      "min": 1,
+      "max": 12,
+      "required": false,
+      "description": "School class currently enrolled in, 1 to 12. ASSUMPTION: modelled as an integer school class; confirm whether post-school levels (UG/PG) must be representable."
+    }
+  }
+}

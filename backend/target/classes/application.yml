@@ -1,0 +1,46 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: yojana-saathi-backend
+
+yojana:
+  data:
+    # Directory holding vocabulary.json and schemes/. Relative paths resolve
+    # against the process working directory (run Maven from backend/).
+    dir: ../data
+  eligibility:
+    # STRICT         - a rule that references a fact the household did not supply
+    #                  is an error: it throws and names the scheme and condition.
+    # FAIL_CONDITION - the same situation fails that one condition instead, with
+    #                  "information missing: <fields>" as the detail.
+    # Default changed from STRICT after drafting the ground truth: 8 of 10 test
+    # households have no studentClass (they are not students), and under STRICT the
+    # scholarship scheme's rule throws instead of returning a verdict for them.
+    missing-field-policy: FAIL_CONDITION
+
+logging:
+  level:
+    in.yojanasaathi: INFO
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      aiService:
+        # Open after half the calls in a 20-call window fail, and retry after
+        # 30 seconds. When the breaker is open the backend fails fast instead of
+        # holding threads, and the frontend switches a citizen to the manual
+        # form, which reaches the rule engine directly. Numbers are a starting
+        # point, not a measurement; tune them against the Phase 9 load test.
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+  timelimiter:
+    instances:
+      aiService:
+        timeoutDuration: 10s

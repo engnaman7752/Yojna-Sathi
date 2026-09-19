@@ -1,0 +1,92 @@
+# Local demo stack. `docker compose up` brings up all five services; the seed
+# container runs once, creates the table and loads the published schemes, then
+# exits.
+#
+# NOT YET VERIFIED. No Docker daemon was available in the session that wrote
+# this, and the backend image cannot build until backend/ compiles. Treat this
+# as the target shape, not as something known to work.
+
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:2.5.2
+    container_name: yojana-dynamodb-local
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "./data"]
+    working_dir: /home/dynamodblocal
+    ports: ["8001:8000"]
+    volumes: ["./.dynamodb-data:/home/dynamodblocal/data"]
+    user: root
+
+  chroma:
+    image: chromadb/chroma:0.5.23
+    container_name: yojana-chroma
+    ports: ["8002:8000"]
+    volumes: ["./.chroma-data:/chroma/chroma"]
+    # Phase 7 uses this. Nothing reads it yet.
+
+  seed:
+    image: amazon/aws-cli:2.17.0
+    container_name: yojana-seed
+    depends_on:
+      dynamodb-local: {condition: service_started}
+    environment:
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_REGION: ap-south-1
+      DDB_ENDPOINT: http://dynamodb-local:8000
+      DDB_TABLE: YojanaSaathi
+    entrypoint: ["/bin/sh", "/infra/seed.sh"]
+    volumes:
+      - ./infra:/infra:ro
+      - ./data:/data:ro
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: yojana-backend
+    depends_on:
+      seed: {condition: service_completed_successfully}
+    environment:
+      AWS_REGION: ap-south-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      DDB_ENDPOINT: http://dynamodb-local:8000
+      DDB_TABLE: YojanaSaathi
+      AUTHZ_PROVIDER: cedar_local
+      DOC_STORAGE: local
+      DOC_LOCAL_DIR: /var/lib/yojana/docs
+      AI_SERVICE_URL: http://ai-service:8000
+      YOJANA_DATA_DIR: /data
+    ports: ["8080:8080"]
+    volumes: ["./data:/data:ro"]
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: yojana-ai-service
+    depends_on:
+      backend: {condition: service_started}
+    environment:
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_CHAT_MODEL: ${GEMINI_CHAT_MODEL:-gemini-2.5-flash}
+      RETRIEVER: chroma
+      CHROMA_URL: http://chroma:8000
+      BACKEND_URL: http://backend:8080
+      YOJANA_DATA_DIR: /data
+    ports: ["8000:8000"]
+    volumes: ["./data:/data:ro"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: yojana-frontend
+    depends_on:
+      backend: {condition: service_started}
+    environment:
+      VITE_BACKEND_URL: http://localhost:8080
+      VITE_AI_SERVICE_URL: http://localhost:8000
+    ports: ["5173:5173"]
