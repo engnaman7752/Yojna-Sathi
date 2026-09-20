@@ -30,7 +30,7 @@ export function SignInPage() {
             Citizens, CSC operators, and officers all sign in through the same
             secure page. Your role decides what you can do once you're in.
           </p>
-          <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => void signIn()}>
+          <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => signIn().catch(e => alert(String(e)))}>
             Sign in with Cognito
           </button>
           <p style={{ marginTop: "var(--sp-4)", fontSize: "var(--fs-xs)", color: "var(--text-muted)" }}>

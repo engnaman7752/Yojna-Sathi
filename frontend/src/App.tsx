@@ -7,6 +7,7 @@ import { OfficerSummary } from "./pages/OfficerSummary";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { SignInPage } from "./pages/SignInPage";
 import { CallbackPage } from "./pages/CallbackPage";
+import { RegisterPage } from "./pages/RegisterPage";
 import { clearSession, loadSession, type Role, type Session } from "./auth/session";
 import { signOut } from "./auth/cognito";
 
@@ -127,8 +128,9 @@ export function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* /callback is public - it runs before there's a session. */}
+        {/* Public routes */}
         <Route path="/callback" element={<CallbackPage onSignIn={setSession} />} />
+        <Route path="/register" element={<RegisterPage />} />
         {/* Everything else needs a session. */}
         <Route
           path="/*"

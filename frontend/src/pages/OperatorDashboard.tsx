@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { type Role, loadSession } from "../auth/session";
+import { request } from "../api/client";
 
 interface Application {
   id: string;
@@ -22,64 +23,68 @@ export function OperatorDashboard({ token }: { token: string }) {
 
   const toggleScheme = (sc: string) => setSelectedSchemes(prev => prev.includes(sc) ? prev.filter(x => x !== sc) : [...prev, sc]);
 
+  const loadApps = async () => {
+    try {
+      const data = await request<Application[]>("/api/operator/applications", { token });
+      setApps(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     const session = loadSession();
     if (session) setRole(session.displayRole);
-
-    const saved = window.localStorage.getItem("yojana.applications");
-    if (saved) {
-      setApps(JSON.parse(saved));
-    } else {
-      // Seed some dummy apps if empty (for demo)
-      const dummy: Application[] = [
-        { id: "APP-9831", applicant: "Ramesh Kumar", scheme: "PM-KISAN", district: "PATNA", status: "PENDING_VDO", documents: ["Aadhar_Card.pdf", "Land_Record.pdf"], dateSubmitted: new Date().toISOString() },
-        { id: "APP-4011", applicant: "Geeta Devi", scheme: "Bihar MVPY", district: "BHAGALPUR", status: "PENDING_BDO", documents: ["Aadhar_Card.pdf", "Age_Proof.jpg"], dateSubmitted: new Date().toISOString() },
-      ];
-      setApps(dummy);
-      window.localStorage.setItem("yojana.applications", JSON.stringify(dummy));
-    }
+    void loadApps();
   }, [token]);
 
-  const saveApps = (newApps: Application[]) => {
+  const saveApps = async (newApps: Application[]) => {
+    // This is purely a UI optimistic update now, backend handles saves per interaction!
     setApps(newApps);
-    window.localStorage.setItem("yojana.applications", JSON.stringify(newApps));
   };
 
-  const handleUpload = (e: React.FormEvent) => {
+  const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedSchemes.length === 0) {
       alert("Please select at least one scheme.");
       return;
     }
 
-    const newApps: Application[] = selectedSchemes.map((sc) => ({
-      id: "APP-" + Math.floor(1000 + Math.random() * 9000),
-      applicant,
-      scheme: sc,
-      district: "PATNA",
-      status: "PENDING_VDO",
-      documents: documentUrl.split(",").map(d => d.trim()).filter(Boolean),
-      dateSubmitted: new Date().toISOString()
-    }));
-
-    saveApps([...newApps, ...apps]);
-    setApplicant("");
+    try {
+      const created = await Promise.all(selectedSchemes.map(async (sc) => {
+        const payload = {
+          applicant,
+          scheme: sc,
+          district: "PATNA",
+          documents: documentUrl.split(",").map(d => d.trim()).filter(Boolean)
+        };
+        return request<Application>("/api/operator/applications", { method: "POST", body: payload, token });
+      }));
+      setApps([...created, ...apps]);
+      setApplicant("");
+      alert("Applications submitted successfully!");
+    } catch (e) {
+      alert("Failed to create application");
+    }
   };
 
-  const handleAction = (id: string, action: 'APPROVE' | 'REJECT') => {
-    const newApps = apps.map(app => {
-      if (app.id !== id) return app;
+  const handleAction = async (id: string, action: 'APPROVE' | 'REJECT') => {
+    const app = apps.find(a => a.id === id);
+    if (!app) return;
 
-      if (action === 'REJECT') return { ...app, status: 'REJECTED' as const };
+    let nextStatus = app.status;
+    if (action === 'REJECT') nextStatus = 'REJECTED' as const;
+    else if (app.status === 'PENDING_VDO') nextStatus = 'PENDING_BDO';
+    else if (app.status === 'PENDING_BDO') nextStatus = 'PENDING_DISTRICT';
+    else if (app.status === 'PENDING_DISTRICT') nextStatus = 'APPROVED';
 
-      let nextStatus = app.status;
-      if (app.status === 'PENDING_VDO') nextStatus = 'PENDING_BDO';
-      else if (app.status === 'PENDING_BDO') nextStatus = 'PENDING_DISTRICT';
-      else if (app.status === 'PENDING_DISTRICT') nextStatus = 'APPROVED';
-
-      return { ...app, status: nextStatus as Application['status'] };
-    });
-    saveApps(newApps);
+    try {
+      await request(`/api/operator/applications/${id}`, { method: "PATCH", body: { status: nextStatus }, token });
+      const newApps = apps.map(a => a.id === id ? { ...a, status: nextStatus as Application['status'] } : a);
+      saveApps(newApps);
+    } catch (err) {
+      alert("Failed to update status");
+    }
   };
 
   // Determine what each role can see

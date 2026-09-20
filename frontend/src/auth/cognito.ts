@@ -20,41 +20,50 @@ const redirectUri = import.meta.env.VITE_COGNITO_REDIRECT_URI;
 const cognitoDomain = import.meta.env.VITE_COGNITO_DOMAIN;
 
 if (!authority || !clientId || !redirectUri || !cognitoDomain) {
-  // Loud dev-time signal - a misconfigured env file is one of the top sources
-  // of "auth just doesn't work" incidents, and it should NOT fail silently.
   console.error("Cognito env vars missing", { authority, clientId, redirectUri, cognitoDomain });
 }
 
-export const userManager = new UserManager({
-  authority,
-  client_id: clientId,
-  redirect_uri: redirectUri,
-  post_logout_redirect_uri: window.location.origin,
-  response_type: "code",
-  scope: "openid email profile",
-  loadUserInfo: false, // Cognito's /userInfo works but is redundant; /api/me is authoritative
-  automaticSilentRenew: true,
-  // Store tokens in localStorage so a page refresh keeps you signed in.
-  // Session storage would be safer but less convenient; for a government
-  // portal we'll harden this later (HttpOnly cookie-backed BFF is the real
-  // production pattern - deferred to Session 5.)
-  userStore: new WebStorageStateStore({ store: window.localStorage }),
-});
+// Dynamically replace localhost with the current window origin if we are deployed
+const safeRedirectUri = redirectUri && redirectUri.includes("localhost") && window.location.hostname !== "localhost"
+  ? `${window.location.origin}/callback`
+  : redirectUri;
+
+let userManager: UserManager | null = null;
+try {
+  userManager = new UserManager({
+    authority: authority || "https://missing",
+    client_id: clientId || "missing",
+    redirect_uri: safeRedirectUri || "http://missing",
+    post_logout_redirect_uri: window.location.origin,
+    response_type: "code",
+    scope: "openid email profile",
+    loadUserInfo: false, // Cognito's /userInfo works but is redundant; /api/me is authoritative
+    automaticSilentRenew: true,
+    // Store tokens in localStorage so a page refresh keeps you signed in.
+    // Session storage would be safer but less convenient; for a government
+    // portal we'll harden this later (HttpOnly cookie-backed BFF is the real
+    // production pattern - deferred to Session 5.)
+    userStore: new WebStorageStateStore({ store: window.localStorage }),
+  });
+} catch (e) {
+  console.error("Failed to initialize UserManager", e);
+}
 
 export async function signIn(): Promise<void> {
+  if (!userManager) {
+    alert("Cognito configuration is missing! Check your environment variables.");
+    return;
+  }
   await userManager.signinRedirect();
 }
 
 export async function completeSignIn(): Promise<User> {
-  // Runs on /callback: exchanges the ?code=... in the URL for real tokens.
+  if (!userManager) throw new Error("No userManager configured");
   return userManager.signinRedirectCallback();
 }
 
 export async function signOut(): Promise<void> {
-  // Cognito's logout endpoint kills the session server-side and redirects
-  // back to us. `end_session_endpoint` in Cognito's discovery doc doesn't
-  // match Cognito's actual /logout URL (a well-known quirk), so we do it
-  // manually.
+  if (!userManager) return;
   const user = await userManager.getUser();
   await userManager.removeUser();
   const logoutUrl = `${cognitoDomain}/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(window.location.origin)}`;
@@ -64,5 +73,5 @@ export async function signOut(): Promise<void> {
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-  return userManager.getUser();
+  return userManager ? userManager.getUser() : null;
 }

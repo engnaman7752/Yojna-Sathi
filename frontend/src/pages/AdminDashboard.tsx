@@ -33,6 +33,16 @@ interface SchemeVersion {
   body: string;
 }
 
+interface PendingUser {
+  pk: string;
+  email: string;
+  name: string;
+  role: string;
+  district: string;
+  status: string;
+  dateRequested: string;
+}
+
 export function AdminDashboard({ token }: { token: string }) {
   const me = loadSession()?.sub ?? "";
   const [rows, setRows] = useState<SchemeVersion[]>([]);
@@ -42,20 +52,40 @@ export function AdminDashboard({ token }: { token: string }) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [extractStatus, setExtractStatus] = useState<string | null>(null);
 
+  const [activeTab, setActiveTab] = useState<"SCHEMES" | "USERS">("SCHEMES");
+  const [users, setUsers] = useState<PendingUser[]>([]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await request<SchemeVersion[]>("/api/admin/schemes", { token });
       setRows(data);
+      if (activeTab === "USERS") {
+        const userData = await request<PendingUser[]>("/api/admin/users", { token });
+        setUsers(userData);
+      }
     } catch (e) {
-      setError(e instanceof ApiError ? e.friendly : "Could not load schemes.");
+      setError(e instanceof ApiError ? e.friendly : "Could not load data.");
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, activeTab]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const approveUser = async (email: string) => {
+    setBusyKey(`approve-${email}`);
+    try {
+      await request(`/api/admin/users/${email}/approve`, { method: "PATCH", body: {}, token });
+      alert("User Approved successfully (Demo Mock Hook)");
+      await load();
+    } catch (e) {
+      alert(e instanceof ApiError ? e.friendly : "Could not approve user");
+    } finally {
+      setBusyKey(null);
+    }
+  };
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -172,140 +202,181 @@ export function AdminDashboard({ token }: { token: string }) {
     <main className="page-container">
       <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--sp-3)" }}>
         <div>
-          <h1 className="page-title">⚙️ Scheme Administration</h1>
-          <p className="page-subtitle">Add or update the eligibility rules citizens see. Every change goes through a second admin.</p>
+          <h1 className="page-title">⚙️ Administration</h1>
+          <p className="page-subtitle">Manage Schemes and User Registrations</p>
         </div>
         <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
-          <label className="btn btn-secondary" style={{ cursor: "pointer" }}>
-            ✨ AI Auto-Draft from PDF
-            <input type="file" accept="application/pdf" style={{ display: "none" }}
-                   onChange={handlePdfUpload} disabled={extractStatus !== null} />
-          </label>
-          <button className="btn btn-primary" onClick={() => setEditing({ form: emptyForm() })}>
-            + New Blank Scheme
-          </button>
+          <div className="tab-group" style={{ display: 'flex', gap: '8px', background: 'var(--bg-card)', padding: '4px', borderRadius: '8px', marginRight: 'var(--sp-4)' }}>
+            <button className={`btn ${activeTab === "SCHEMES" ? "btn-primary" : "btn-secondary"}`} style={{ padding: '0.4rem 1rem' }} onClick={() => setActiveTab("SCHEMES")}>Schemes</button>
+            <button className={`btn ${activeTab === "USERS" ? "btn-primary" : "btn-secondary"}`} style={{ padding: '0.4rem 1rem' }} onClick={() => setActiveTab("USERS")}>User Approvals</button>
+          </div>
+          {activeTab === "SCHEMES" && (
+            <>
+              <label className="btn btn-secondary" style={{ cursor: "pointer" }}>
+                ✨ AI Auto-Draft from PDF
+                <input type="file" accept="application/pdf" style={{ display: "none" }}
+                  onChange={handlePdfUpload} disabled={extractStatus !== null} />
+              </label>
+              <button className="btn btn-primary" onClick={() => setEditing({ form: emptyForm() })}>
+                + New Blank Scheme
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      {extractStatus && (
-        <div className="alert" style={{ marginBottom: "var(--sp-4)", background: "var(--warning-bg)", color: "var(--warning)", display: "flex", gap: "var(--sp-3)", alignItems: "center" }}>
-          <div className="spinner" style={{ width: 20, height: 20, borderTopColor: "currentColor" }} />
-          <div>{extractStatus}</div>
-        </div>
-      )}
-      {error && <div className="alert alert-danger" style={{ marginBottom: "var(--sp-4)" }}>⚠️ {error}</div>}
-
-      {editing && (
-        <div className="glass-card" style={{ padding: "var(--sp-6)", marginBottom: "var(--sp-6)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "var(--sp-4)" }}>
-            <div>
-              <h2 style={{ margin: 0 }}>{editing.sourcePdf ? "Review AI-drafted scheme" : "New scheme"}</h2>
-              {editing.sourcePdf && (
-                <p style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)", margin: "var(--sp-2) 0 0 0" }}>
-                  📄 Auto-drafted from <strong>{editing.sourcePdf}</strong>. Review each field carefully — the AI may misread rules.
-                </p>
-              )}
-              {editing.droppedConditions ? (
-                <div className="alert" style={{ marginTop: "var(--sp-3)", background: "var(--warning-bg)", color: "var(--warning)", padding: "var(--sp-3)", fontSize: "var(--fs-sm)" }}>
-                  ⚠️ {editing.droppedConditions} AI-drafted condition(s) had rules too complex for the form editor and were dropped. Check the Advanced panel below to see the raw JSON.
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <SchemeEditor value={editing.form} onChange={(next) => setEditing({ ...editing, form: next })} />
-
-          <div style={{ display: "flex", gap: "var(--sp-3)", marginTop: "var(--sp-6)", justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: "var(--sp-4)" }}>
-            <button className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
-            <button className="btn btn-primary" onClick={saveDraft} disabled={busyKey === "save"}>
-              {busyKey === "save" ? "Saving..." : "💾 Save as Draft"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="data-table-wrapper glass-card">
-        {loading ? (
-          <div className="loading-state">
-            <div className="spinner" style={{ width: "2rem", height: "2rem" }} />
-            <p>Loading schemes...</p>
-          </div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Scheme</th><th>V</th><th>State</th><th>Status</th>
-                <th>Drafter</th><th>Editors</th><th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRows.map(row => {
-                const rowKey = `${row.schemeId}-${row.version}`;
-                const publishKey = `pub-${rowKey}`;
-                const rejectKey = `rej-${rowKey}`;
-                const cannotPublishReason =
-                  row.status !== "DRAFT" ? null :
-                  row.drafter === me ? "You drafted this — ask a different admin" :
-                  (row.editors || []).includes(me) ? "You edited this — ask a different admin" : null;
-                return (
-                  <tr key={rowKey}>
-                    <td><strong>{row.name}</strong><br /><code style={{ fontSize: "0.75rem" }}>{row.schemeId}</code></td>
-                    <td>{row.version}</td>
-                    <td>{row.state}</td>
-                    <td>{badge(row.status)}</td>
-                    <td><code style={{ fontSize: "0.75rem" }}>{shorten(row.drafter)}</code></td>
+      {activeTab === "USERS" ? (
+        <div className="data-table-wrapper glass-card">
+          {loading ? (
+            <div className="loading-state"><div className="spinner" style={{ width: "2rem", height: "2rem" }} /><p>Loading users...</p></div>
+          ) : (
+            <table className="data-table">
+              <thead><tr><th>Registrant</th><th>Role Requested</th><th>District</th><th>Date</th><th>Action</th></tr></thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.email}>
+                    <td><strong>{u.name}</strong><br />{u.email}</td>
+                    <td><span className="badge">{u.role}</span></td>
+                    <td>{u.district}</td>
+                    <td>{new Date(u.dateRequested).toLocaleDateString()}</td>
                     <td>
-                      {(row.editors || []).length === 0 ? <span style={{ color: "var(--text-muted)" }}>—</span>
-                        : (row.editors || []).map(e => <code key={e} style={{ fontSize: "0.7rem", marginRight: 4 }}>{shorten(e)}</code>)}
-                    </td>
-                    <td>
-                      {row.status === "DRAFT" && (
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          <button className="btn btn-secondary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem" }}
-                                  onClick={() => openEdit(row)}>
-                            Edit
-                          </button>
-                          <button className="btn btn-primary"
-                                  style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem" }}
-                                  disabled={!canPublish(row) || busyKey === publishKey}
-                                  title={cannotPublishReason || "Publish"}
-                                  onClick={() => publish(row)}>
-                            {busyKey === publishKey ? "..." : "✅ Publish"}
-                          </button>
-                          <button className="btn"
-                                  style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem", background: "var(--danger)", color: "white" }}
-                                  disabled={busyKey === rejectKey}
-                                  onClick={() => reject(row)}>
-                            {busyKey === rejectKey ? "..." : "❌ Reject"}
-                          </button>
-                        </div>
-                      )}
-                      {row.status === "PUBLISHED" && (
-                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                          by <code>{shorten(row.publishedBy ?? "?")}</code>
-                        </span>
-                      )}
+                      <button className="btn btn-primary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem" }} onClick={() => approveUser(u.email)} disabled={busyKey === `approve-${u.email}`}>
+                        {busyKey === `approve-${u.email}` ? "Approving..." : "✅ Approve"}
+                      </button>
                     </td>
                   </tr>
-                );
-              })}
-              {sortedRows.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: "var(--sp-8)" }}>
-                  <div style={{ fontSize: "2rem" }}>📝</div>
-                  <div>No scheme versions yet.</div>
-                  <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "var(--sp-2)" }}>
-                    Upload a scheme PDF or click "New Blank Scheme" to create the first one.
-                  </div>
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        )}
-      </div>
+                ))}
+                {users.length === 0 && (
+                  <tr><td colSpan={5} style={{ textAlign: "center", padding: "var(--sp-8)" }}>No pending registrations found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : (
+        <>
 
-      <p style={{ marginTop: "var(--sp-4)", fontSize: "var(--fs-xs)", color: "var(--text-muted)" }}>
-        <strong>Maker-checker rule:</strong> Publish is disabled for any draft you created or edited. Another admin must review and publish it.
-      </p>
+          {extractStatus && (
+            <div className="alert" style={{ marginBottom: "var(--sp-4)", background: "var(--warning-bg)", color: "var(--warning)", display: "flex", gap: "var(--sp-3)", alignItems: "center" }}>
+              <div className="spinner" style={{ width: 20, height: 20, borderTopColor: "currentColor" }} />
+              <div>{extractStatus}</div>
+            </div>
+          )}
+          {error && <div className="alert alert-danger" style={{ marginBottom: "var(--sp-4)" }}>⚠️ {error}</div>}
+
+          {editing && (
+            <div className="glass-card" style={{ padding: "var(--sp-6)", marginBottom: "var(--sp-6)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "var(--sp-4)" }}>
+                <div>
+                  <h2 style={{ margin: 0 }}>{editing.sourcePdf ? "Review AI-drafted scheme" : "New scheme"}</h2>
+                  {editing.sourcePdf && (
+                    <p style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)", margin: "var(--sp-2) 0 0 0" }}>
+                      📄 Auto-drafted from <strong>{editing.sourcePdf}</strong>. Review each field carefully — the AI may misread rules.
+                    </p>
+                  )}
+                  {editing.droppedConditions ? (
+                    <div className="alert" style={{ marginTop: "var(--sp-3)", background: "var(--warning-bg)", color: "var(--warning)", padding: "var(--sp-3)", fontSize: "var(--fs-sm)" }}>
+                      ⚠️ {editing.droppedConditions} AI-drafted condition(s) had rules too complex for the form editor and were dropped. Check the Advanced panel below to see the raw JSON.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <SchemeEditor value={editing.form} onChange={(next) => setEditing({ ...editing, form: next })} />
+
+              <div style={{ display: "flex", gap: "var(--sp-3)", marginTop: "var(--sp-6)", justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: "var(--sp-4)" }}>
+                <button className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
+                <button className="btn btn-primary" onClick={saveDraft} disabled={busyKey === "save"}>
+                  {busyKey === "save" ? "Saving..." : "💾 Save as Draft"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="data-table-wrapper glass-card">
+            {loading ? (
+              <div className="loading-state">
+                <div className="spinner" style={{ width: "2rem", height: "2rem" }} />
+                <p>Loading schemes...</p>
+              </div>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Scheme</th><th>V</th><th>State</th><th>Status</th>
+                    <th>Drafter</th><th>Editors</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedRows.map(row => {
+                    const rowKey = `${row.schemeId}-${row.version}`;
+                    const publishKey = `pub-${rowKey}`;
+                    const rejectKey = `rej-${rowKey}`;
+                    const cannotPublishReason =
+                      row.status !== "DRAFT" ? null :
+                        row.drafter === me ? "You drafted this — ask a different admin" :
+                          (row.editors || []).includes(me) ? "You edited this — ask a different admin" : null;
+                    return (
+                      <tr key={rowKey}>
+                        <td><strong>{row.name}</strong><br /><code style={{ fontSize: "0.75rem" }}>{row.schemeId}</code></td>
+                        <td>{row.version}</td>
+                        <td>{row.state}</td>
+                        <td>{badge(row.status)}</td>
+                        <td><code style={{ fontSize: "0.75rem" }}>{shorten(row.drafter)}</code></td>
+                        <td>
+                          {(row.editors || []).length === 0 ? <span style={{ color: "var(--text-muted)" }}>—</span>
+                            : (row.editors || []).map(e => <code key={e} style={{ fontSize: "0.7rem", marginRight: 4 }}>{shorten(e)}</code>)}
+                        </td>
+                        <td>
+                          {row.status === "DRAFT" && (
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              <button className="btn btn-secondary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem" }}
+                                onClick={() => openEdit(row)}>
+                                Edit
+                              </button>
+                              <button className="btn btn-primary"
+                                style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem" }}
+                                disabled={!canPublish(row) || busyKey === publishKey}
+                                title={cannotPublishReason || "Publish"}
+                                onClick={() => publish(row)}>
+                                {busyKey === publishKey ? "..." : "✅ Publish"}
+                              </button>
+                              <button className="btn"
+                                style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem", background: "var(--danger)", color: "white" }}
+                                disabled={busyKey === rejectKey}
+                                onClick={() => reject(row)}>
+                                {busyKey === rejectKey ? "..." : "❌ Reject"}
+                              </button>
+                            </div>
+                          )}
+                          {row.status === "PUBLISHED" && (
+                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                              by <code>{shorten(row.publishedBy ?? "?")}</code>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {sortedRows.length === 0 && (
+                    <tr><td colSpan={7} style={{ textAlign: "center", padding: "var(--sp-8)" }}>
+                      <div style={{ fontSize: "2rem" }}>📝</div>
+                      <div>No scheme versions yet.</div>
+                      <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "var(--sp-2)" }}>
+                        Upload a scheme PDF or click "New Blank Scheme" to create the first one.
+                      </div>
+                    </td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <p style={{ marginTop: "var(--sp-4)", fontSize: "var(--fs-xs)", color: "var(--text-muted)" }}>
+            <strong>Maker-checker rule:</strong> Publish is disabled for any draft you created or edited. Another admin must review and publish it.
+          </p>
+        </>
+      )}
     </main>
   );
 }

@@ -1,44 +1,55 @@
 package in.yojanasaathi.eligibility.web;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import in.yojanasaathi.persistence.ApplicationRecord;
+import in.yojanasaathi.persistence.ApplicationRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.UUID;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/operator")
 public class OperatorController {
 
-    public record HouseholdRow(String householdId, String district, boolean consentActive, String consentExpiresAt) {
-    }
+        private final ApplicationRepository applicationRepository;
 
-    @GetMapping("/households")
-    public List<HouseholdRow> getHouseholds(
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
-        // Multi-tenancy simulation: if the frontend sends the token (which we simulated
-        // as role:name:uuid)
-        // We can create varied dummy data.
-
-        String dummyDistrict = "BHAGALPUR";
-        if (authHeader != null && authHeader.contains("Ramesh")) {
-            dummyDistrict = "PATNA";
+        public OperatorController(ApplicationRepository applicationRepository) {
+                this.applicationRepository = applicationRepository;
         }
 
-        String expiresSoon = LocalDateTime.now().plusDays(2).format(DateTimeFormatter.ISO_LOCAL_DATE);
-        String expired = LocalDateTime.now().minusDays(5).format(DateTimeFormatter.ISO_LOCAL_DATE);
+        @GetMapping("/applications")
+        public List<ApplicationRecord> getApplications(@RequestParam(required = false) String status) {
+                return applicationRepository.listAll(status);
+        }
 
-        return List.of(
-                new HouseholdRow("h-" + UUID.randomUUID().toString().substring(0, 12), dummyDistrict, true,
-                        expiresSoon),
-                new HouseholdRow("h-" + UUID.randomUUID().toString().substring(0, 12), dummyDistrict, true,
-                        expiresSoon),
-                new HouseholdRow("h-" + UUID.randomUUID().toString().substring(0, 12), dummyDistrict, false, expired),
-                new HouseholdRow("h-" + UUID.randomUUID().toString().substring(0, 12), dummyDistrict, true,
-                        expiresSoon));
-    }
+        @PostMapping("/applications")
+        public ApplicationRecord createApplication(@RequestBody ApplicationRecord application) {
+                if (application.getId() == null || application.getId().isBlank()) {
+                        application.setId("APP-" + (int) (Math.random() * 90000 + 10000));
+                }
+                if (application.getDateSubmitted() == null) {
+                        application.setDateSubmitted(ApplicationRepository.nowIsoTimestamp());
+                }
+                if (application.getStatus() == null) {
+                        application.setStatus("PENDING_VDO");
+                }
+                return applicationRepository.save(application);
+        }
+
+        @PatchMapping("/applications/{id}")
+        public ApplicationRecord updateStatus(@PathVariable String id, @RequestBody Map<String, String> payload) {
+                String newStatus = payload.get("status");
+                if (newStatus == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status is required");
+                }
+
+                ApplicationRecord record = applicationRepository.findById(id)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                                                "Application not found"));
+
+                record.setStatus(newStatus);
+                return applicationRepository.save(record);
+        }
 }

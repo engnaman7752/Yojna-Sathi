@@ -54,7 +54,7 @@ export function ResultsView({ result }: { result: EligibilityCheckResponse }) {
                 <h4>🏢 Apply Directly (Self-Service)</h4>
                 <p style={{ fontSize: '0.85rem', color: '#64748b' }}>You can upload your documents here and immediately queue this application for Village level review.</p>
                 <form
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
 
                     const fd = new FormData(e.currentTarget);
@@ -62,21 +62,27 @@ export function ResultsView({ result }: { result: EligibilityCheckResponse }) {
                     const district = (fd.get('district') as string) || 'PATNA';
                     const doc = (fd.get('document') as string) || 'Scan.pdf';
 
-                    const newApp = {
-                      id: "APP-" + Math.floor(1000 + Math.random() * 9000),
+                    const payload = {
                       applicant,
                       scheme: scheme.schemeName,
                       district,
-                      status: "PENDING_VDO",
                       documents: [doc],
-                      dateSubmitted: new Date().toISOString()
                     };
 
-                    const saved = window.localStorage.getItem("yojana.applications");
-                    const apps = saved ? JSON.parse(saved) : [];
-                    window.localStorage.setItem("yojana.applications", JSON.stringify([newApp, ...apps]));
+                    try {
+                      // Import request dynamically since token is available from layout or we just rely on cookies/session
+                      // Actually ResultsView needs a token. But ResultsView uses api/client to check eligibility!
+                      // I will grab the global token from localStorage or we can pass it down. 
+                      // Wait! We can just fetch using raw `window.fetch` if request isn't easily given token, but we should use `request`.
+                      const { request } = await import('../api/client');
+                      const session = localStorage.getItem("auth::session");
+                      const token = session ? JSON.parse(session).token : "";
 
-                    alert("Application submitted! Reference ID: " + newApp.id);
+                      const savedApp = await request("/api/operator/applications", { method: "POST", body: payload, token }) as { id: string };
+                      alert("Application submitted! Reference ID: " + savedApp.id);
+                    } catch (err) {
+                      alert("Failed to submit application. Ensure you are signed in.");
+                    }
                   }}
                   style={{ marginTop: 'var(--sp-2)' }}
                 >
