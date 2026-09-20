@@ -1,23 +1,18 @@
 package in.yojanasaathi.common;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
-import java.util.UUID;
-
-@RestController
-@RequestMapping("/api/dev/auth")
-public class AuthController {
-
-    @GetMapping
-    public Map<String, String> authenticateDevUser(@RequestParam String role, @RequestParam String name) {
-        // Since Phase 1 does not use JWT verification securely, we just return a stub
-        // token.
-        // We include the role explicitly so controllers can simulate reading it.
-        String dummyToken = role + ":" + name + ":" + UUID.randomUUID().toString();
-        return Map.of("token", dummyToken);
-    }
+/**
+ * DELETED in Phase 3.
+ *
+ * This class used to serve GET /api/dev/auth and hand out unsigned string
+ * "tokens" that anything on the internet could forge. It is replaced by Amazon
+ * Cognito (Hosted UI + JWT resource server); the frontend redirects users to
+ * Cognito's sign-in page and gets back a real, signed JWT that SecurityConfig
+ * verifies on every request.
+ *
+ * Kept as an empty file (rather than deleted) because the connected folder is
+ * read-only for deletes in this session. Safe to remove the file entirely once
+ * you have delete permissions in your working folder.
+ */
+final class AuthControllerRemoved {
+    private AuthControllerRemoved() {}
 }

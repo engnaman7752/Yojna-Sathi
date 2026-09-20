@@ -1,295 +1,315 @@
-import { useState, useEffect } from "react";
-import { request } from "../api/client";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ApiError, AI_SERVICE_URL, request } from "../api/client";
+import { loadSession } from "../auth/session";
+import { SchemeEditor, emptyForm, formFromJson, formToJson, type SchemeForm } from "../components/SchemeEditor";
+
+/**
+ * Scheme administration with maker-checker (Session 5) + AI PDF auto-draft
+ * + non-technical form editor (Session 6).
+ *
+ * Two ways to create a draft:
+ * 1. Upload a scheme PDF - ai-service reads it, Gemini extracts a JSON
+ *    matching the vocabulary. That JSON is loaded straight into the form
+ *    editor so a non-tech admin can review with dropdowns, not JsonLogic.
+ * 2. Blank draft - opens the empty form editor.
+ *
+ * Either way the draft goes into DynamoDB with the current user as `drafter`.
+ * Another admin then Publishes (Rule 2: same admin cannot publish).
+ */
+
+type Status = "DRAFT" | "PUBLISHED" | "REJECTED";
+
 interface SchemeVersion {
-    schemeId: string;
-    name: string;
-    state: string;
-    version: number;
-    status: "DRAFT" | "PUBLISHED" | "REJECTED";
-    conditions: any[];
+  schemeId: string;
+  version: number;
+  name: string;
+  state: string;
+  status: Status;
+  drafter: string;
+  editors: string[];
+  publishedBy?: string | null;
+  updatedAt: string;
+  publishedAt?: string | null;
+  body: string;
 }
 
 export function AdminDashboard({ token }: { token: string }) {
-    const [schemes, setSchemes] = useState<SchemeVersion[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+  const me = loadSession()?.sub ?? "";
+  const [rows, setRows] = useState<SchemeVersion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{ form: SchemeForm; sourcePdf?: string; droppedConditions?: number } | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [extractStatus, setExtractStatus] = useState<string | null>(null);
 
-    // Editor Modal State
-    const [editingScheme, setEditingScheme] = useState<SchemeVersion | null>(null);
-    const [saving, setSaving] = useState(false);
-
-    const [extracting, setExtracting] = useState(false);
-
-    useEffect(() => {
-        fetchSchemes();
-    }, []);
-
-    async function fetchSchemes() {
-        setLoading(true);
-        try {
-            const data = await request<SchemeVersion[]>("/api/admin/schemes", { token });
-            setSchemes(data);
-        } catch (e: any) {
-            setError("Failed to load schemes.");
-        } finally {
-            setLoading(false);
-        }
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await request<SchemeVersion[]>("/api/admin/schemes", { token });
+      setRows(data);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.friendly : "Could not load schemes.");
+    } finally {
+      setLoading(false);
     }
+  }, [token]);
 
-    async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
-        if (!e.target.files || e.target.files.length === 0) return;
-        const file = e.target.files[0];
+  useEffect(() => { void load(); }, [load]);
 
-        setExtracting(true);
-        setError(null);
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
-
-            const res = await fetch("http://localhost:8000/admin/extract", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${token}`
-                },
-                body: formData
-            });
-
-            if (!res.ok) {
-                const text = await res.text();
-                throw new Error(`AI Extraction Failed: ${text}`);
-            }
-
-            const draftedJson = await res.json();
-            setEditingScheme(draftedJson);
-
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setExtracting(false);
-            if (e.target) e.target.value = ""; // reset file input
-        }
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      alert("Please upload a .pdf file.");
+      return;
     }
-
-    function handleEditContent(scheme: SchemeVersion) {
-        setEditingScheme(scheme);
+    setExtractStatus(`Reading "${file.name}" and drafting scheme with AI... 30–60 seconds for a real document.`);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${AI_SERVICE_URL}/admin/extract`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Extraction failed (${res.status}): ${text}`);
+      }
+      const draft = await res.json();
+      const { form, dropped } = formFromJson(draft);
+      setEditing({ form, sourcePdf: file.name, droppedConditions: dropped });
+      setExtractStatus(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setExtractStatus(null);
+      setError(`AI extraction failed. ${msg}. Check the ai-service is running on ${AI_SERVICE_URL} and GEMINI_API_KEY is set in ai-service/.env.`);
     }
+  };
 
-    function handleNewScheme() {
-        const template: SchemeVersion = {
-            schemeId: "new-scheme",
-            name: "New Scheme Name",
-            state: "ALL",
-            version: 1,
-            status: "DRAFT",
-            conditions: [
-                {
-                    id: "c1",
-                    label: "Must be a resident of India",
-                    rule: { "==": [{ var: "state" }, "ALL"] }
-                }
-            ]
-        };
-        setEditingScheme(template);
+  const saveDraft = async () => {
+    if (!editing) return;
+    if (!editing.form.schemeId.trim() || !editing.form.name.trim()) {
+      alert("Scheme ID and Name are required."); return;
     }
-
-    function parseRule(rule: any) {
-        if (!rule) return { field: "state", operator: "==", value: "" };
-        const op = Object.keys(rule)[0];
-        const args = rule[op];
-        if (!Array.isArray(args) || !args[0]?.var) return { field: "state", operator: "==", value: "" };
-        const val = Array.isArray(args[1]) ? args[1].join(", ") : args[1];
-        return { field: args[0].var, operator: op, value: val };
+    if (editing.form.conditions.length === 0) {
+      if (!confirm("This scheme has NO eligibility conditions — every citizen will pass. Save anyway?")) return;
     }
-
-    function buildRule(field: string, op: string, valStr: string) {
-        let finalVal: any = valStr;
-        if (op === "in") finalVal = valStr.split(",").map((v: string) => v.trim());
-        else if (!isNaN(Number(valStr)) && valStr.trim() !== "") finalVal = Number(valStr);
-        return { [op]: [{ var: field }, finalVal] };
+    setBusyKey("save");
+    try {
+      const body = formToJson(editing.form);
+      await request("/api/admin/schemes", { method: "POST", body, token });
+      setEditing(null);
+      await load();
+    } catch (e) {
+      alert(e instanceof ApiError ? e.friendly : (e as Error).message);
+    } finally {
+      setBusyKey(null);
     }
+  };
 
-    function updateObj(updates: Partial<SchemeVersion>) {
-        if (editingScheme) setEditingScheme({ ...editingScheme, ...updates });
+  const publish = async (row: SchemeVersion) => {
+    const key = `pub-${row.schemeId}-${row.version}`;
+    setBusyKey(key);
+    try {
+      await request(`/api/admin/schemes/${row.schemeId}/versions/${row.version}/publish`,
+        { method: "POST", body: {}, token });
+      await load();
+    } catch (e) {
+      alert(e instanceof ApiError ? e.friendly : "Publish failed.");
+    } finally {
+      setBusyKey(null);
     }
+  };
 
-    async function handleSave() {
-        if (!editingScheme) return;
-        setSaving(true);
-        try {
-            await request("/api/admin/schemes", {
-                method: "POST",
-                body: editingScheme,
-                token
-            });
-            setEditingScheme(null);
-            await fetchSchemes();
-        } catch (e: any) {
-            alert("Failed to save: " + e.message);
-        } finally {
-            setSaving(false);
-        }
+  const reject = async (row: SchemeVersion) => {
+    if (!confirm(`Reject ${row.schemeId} v${row.version}? This can't be undone.`)) return;
+    const key = `rej-${row.schemeId}-${row.version}`;
+    setBusyKey(key);
+    try {
+      await request(`/api/admin/schemes/${row.schemeId}/versions/${row.version}/reject`,
+        { method: "POST", body: {}, token });
+      await load();
+    } catch (e) {
+      alert(e instanceof ApiError ? e.friendly : "Reject failed.");
+    } finally {
+      setBusyKey(null);
     }
+  };
 
-    return (
-        <main className="page-container">
-            <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                    <h1 className="page-title">⚙️ Scheme Administration</h1>
-                    <p className="page-subtitle">Maker-Checker Scheme Rules Publishing CMS</p>
+  const openEdit = (row: SchemeVersion) => {
+    try {
+      const parsed = JSON.parse(row.body);
+      const { form, dropped } = formFromJson(parsed);
+      setEditing({ form, droppedConditions: dropped });
+    } catch {
+      alert("Could not parse this scheme's body — it may be corrupt in the database.");
+    }
+  };
+
+  const canPublish = (row: SchemeVersion) =>
+    row.status === "DRAFT" && row.drafter !== me && !(row.editors || []).includes(me);
+
+  const sortedRows = useMemo(() => {
+    const rank: Record<Status, number> = { DRAFT: 0, PUBLISHED: 1, REJECTED: 2 };
+    return [...rows].sort((a, b) => {
+      if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status];
+      if (a.schemeId !== b.schemeId) return a.schemeId.localeCompare(b.schemeId);
+      return b.version - a.version;
+    });
+  }, [rows]);
+
+  const badge = (s: Status) => {
+    if (s === "DRAFT") return <span className="badge" style={{ background: "var(--warning-bg)", color: "var(--warning)" }}>📝 Draft</span>;
+    if (s === "PUBLISHED") return <span className="badge badge-citizen">✅ Published</span>;
+    return <span className="badge badge-admin">❌ Rejected</span>;
+  };
+
+  return (
+    <main className="page-container">
+      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--sp-3)" }}>
+        <div>
+          <h1 className="page-title">⚙️ Scheme Administration</h1>
+          <p className="page-subtitle">Add or update the eligibility rules citizens see. Every change goes through a second admin.</p>
+        </div>
+        <div style={{ display: "flex", gap: "var(--sp-3)", flexWrap: "wrap" }}>
+          <label className="btn btn-secondary" style={{ cursor: "pointer" }}>
+            ✨ AI Auto-Draft from PDF
+            <input type="file" accept="application/pdf" style={{ display: "none" }}
+                   onChange={handlePdfUpload} disabled={extractStatus !== null} />
+          </label>
+          <button className="btn btn-primary" onClick={() => setEditing({ form: emptyForm() })}>
+            + New Blank Scheme
+          </button>
+        </div>
+      </div>
+
+      {extractStatus && (
+        <div className="alert" style={{ marginBottom: "var(--sp-4)", background: "var(--warning-bg)", color: "var(--warning)", display: "flex", gap: "var(--sp-3)", alignItems: "center" }}>
+          <div className="spinner" style={{ width: 20, height: 20, borderTopColor: "currentColor" }} />
+          <div>{extractStatus}</div>
+        </div>
+      )}
+      {error && <div className="alert alert-danger" style={{ marginBottom: "var(--sp-4)" }}>⚠️ {error}</div>}
+
+      {editing && (
+        <div className="glass-card" style={{ padding: "var(--sp-6)", marginBottom: "var(--sp-6)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "var(--sp-4)" }}>
+            <div>
+              <h2 style={{ margin: 0 }}>{editing.sourcePdf ? "Review AI-drafted scheme" : "New scheme"}</h2>
+              {editing.sourcePdf && (
+                <p style={{ fontSize: "var(--fs-sm)", color: "var(--text-muted)", margin: "var(--sp-2) 0 0 0" }}>
+                  📄 Auto-drafted from <strong>{editing.sourcePdf}</strong>. Review each field carefully — the AI may misread rules.
+                </p>
+              )}
+              {editing.droppedConditions ? (
+                <div className="alert" style={{ marginTop: "var(--sp-3)", background: "var(--warning-bg)", color: "var(--warning)", padding: "var(--sp-3)", fontSize: "var(--fs-sm)" }}>
+                  ⚠️ {editing.droppedConditions} AI-drafted condition(s) had rules too complex for the form editor and were dropped. Check the Advanced panel below to see the raw JSON.
                 </div>
-                <div style={{ display: "flex", gap: "var(--sp-4)" }}>
-                    {extracting && <span style={{ padding: "var(--sp-2)", color: "var(--text-muted)" }}>🤖 Reading PDF...</span>}
-                    <label className="btn btn-secondary" style={{ cursor: "pointer" }}>
-                        ✨ AI PDF Auto-Draft
-                        <input type="file" accept="application/pdf" style={{ display: "none" }} onChange={handlePdfUpload} disabled={extracting} />
-                    </label>
-                    <button className="btn btn-primary" onClick={handleNewScheme}>+ New Blank Draft</button>
-                </div>
+              ) : null}
             </div>
+          </div>
 
-            {error && <div className="alert alert-danger">{error}</div>}
+          <SchemeEditor value={editing.form} onChange={(next) => setEditing({ ...editing, form: next })} />
 
-            <div className="glass-card" style={{ padding: "0" }}>
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th>Scheme ID</th>
-                            <th>Name</th>
-                            <th>State</th>
-                            <th>Version</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading ? (
-                            <tr><td colSpan={6} style={{ textAlign: "center", padding: "var(--sp-8)" }}><div className="spinner" /></td></tr>
-                        ) : schemes.map((s: SchemeVersion) => (
-                            <tr key={`${s.schemeId}-v${s.version}`}>
-                                <td style={{ fontFamily: "monospace" }}>{s.schemeId}</td>
-                                <td>{s.name}</td>
-                                <td><span className="badge">{s.state}</span></td>
-                                <td>v{s.version}</td>
-                                <td>
-                                    <span className={`badge badge-${s.status === 'PUBLISHED' ? 'citizen' : s.status === 'DRAFT' ? 'admin' : 'secondary'}`}>
-                                        {s.status}
-                                    </span>
-                                </td>
-                                <td>
-                                    <button className="btn btn-secondary" onClick={() => handleEditContent(s)}>
-                                        Edit Config
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                        {!loading && schemes.length === 0 && (
-                            <tr><td colSpan={6} style={{ textAlign: "center", padding: "var(--sp-6)" }}>No schemes found.</td></tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+          <div style={{ display: "flex", gap: "var(--sp-3)", marginTop: "var(--sp-6)", justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: "var(--sp-4)" }}>
+            <button className="btn btn-secondary" onClick={() => setEditing(null)}>Cancel</button>
+            <button className="btn btn-primary" onClick={saveDraft} disabled={busyKey === "save"}>
+              {busyKey === "save" ? "Saving..." : "💾 Save as Draft"}
+            </button>
+          </div>
+        </div>
+      )}
 
-            {/* Non-Technical Form Editor Modal */}
-            {editingScheme && (
-                <div style={{
-                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000
-                }}>
-                    <div className="glass-card" style={{
-                        width: "800px", maxWidth: "90vw", maxHeight: "90vh", display: "flex", flexDirection: "column", overflowY: "auto"
-                    }}>
-                        <h2 style={{ marginBottom: "var(--sp-2)", color: "var(--primary)" }}>Scheme Visual Builder</h2>
-
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--sp-4)", borderBottom: "1px solid var(--border)", paddingBottom: "var(--sp-4)", marginBottom: "var(--sp-4)" }}>
-                            <div className="form-group">
-                                <label>Scheme ID</label>
-                                <input className="form-input" value={editingScheme.schemeId} onChange={e => updateObj({ schemeId: e.target.value })} />
-                            </div>
-                            <div className="form-group">
-                                <label>Scheme Name</label>
-                                <input className="form-input" value={editingScheme.name} onChange={e => updateObj({ name: e.target.value })} />
-                            </div>
-                            <div className="form-group">
-                                <label>Target State</label>
-                                <input className="form-input" value={editingScheme.state} onChange={e => updateObj({ state: e.target.value })} />
-                            </div>
-                            <div className="form-group">
-                                <label>Maker/Checker Status</label>
-                                <select className="form-input" value={editingScheme.status} onChange={e => updateObj({ status: e.target.value as any })}>
-                                    <option value="DRAFT">DRAFT</option>
-                                    <option value="PUBLISHED">PUBLISHED</option>
-                                    <option value="REJECTED">REJECTED</option>
-                                </select>
-                            </div>
-                            <div className="form-group">
-                                <label>Version (Bump to draft a new version)</label>
-                                <input type="number" className="form-input" value={editingScheme.version} onChange={e => updateObj({ version: Number(e.target.value) })} />
-                            </div>
+      <div className="data-table-wrapper glass-card">
+        {loading ? (
+          <div className="loading-state">
+            <div className="spinner" style={{ width: "2rem", height: "2rem" }} />
+            <p>Loading schemes...</p>
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Scheme</th><th>V</th><th>State</th><th>Status</th>
+                <th>Drafter</th><th>Editors</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRows.map(row => {
+                const rowKey = `${row.schemeId}-${row.version}`;
+                const publishKey = `pub-${rowKey}`;
+                const rejectKey = `rej-${rowKey}`;
+                const cannotPublishReason =
+                  row.status !== "DRAFT" ? null :
+                  row.drafter === me ? "You drafted this — ask a different admin" :
+                  (row.editors || []).includes(me) ? "You edited this — ask a different admin" : null;
+                return (
+                  <tr key={rowKey}>
+                    <td><strong>{row.name}</strong><br /><code style={{ fontSize: "0.75rem" }}>{row.schemeId}</code></td>
+                    <td>{row.version}</td>
+                    <td>{row.state}</td>
+                    <td>{badge(row.status)}</td>
+                    <td><code style={{ fontSize: "0.75rem" }}>{shorten(row.drafter)}</code></td>
+                    <td>
+                      {(row.editors || []).length === 0 ? <span style={{ color: "var(--text-muted)" }}>—</span>
+                        : (row.editors || []).map(e => <code key={e} style={{ fontSize: "0.7rem", marginRight: 4 }}>{shorten(e)}</code>)}
+                    </td>
+                    <td>
+                      {row.status === "DRAFT" && (
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <button className="btn btn-secondary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem" }}
+                                  onClick={() => openEdit(row)}>
+                            Edit
+                          </button>
+                          <button className="btn btn-primary"
+                                  style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem" }}
+                                  disabled={!canPublish(row) || busyKey === publishKey}
+                                  title={cannotPublishReason || "Publish"}
+                                  onClick={() => publish(row)}>
+                            {busyKey === publishKey ? "..." : "✅ Publish"}
+                          </button>
+                          <button className="btn"
+                                  style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem", background: "var(--danger)", color: "white" }}
+                                  disabled={busyKey === rejectKey}
+                                  onClick={() => reject(row)}>
+                            {busyKey === rejectKey ? "..." : "❌ Reject"}
+                          </button>
                         </div>
+                      )}
+                      {row.status === "PUBLISHED" && (
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                          by <code>{shorten(row.publishedBy ?? "?")}</code>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {sortedRows.length === 0 && (
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: "var(--sp-8)" }}>
+                  <div style={{ fontSize: "2rem" }}>📝</div>
+                  <div>No scheme versions yet.</div>
+                  <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "var(--sp-2)" }}>
+                    Upload a scheme PDF or click "New Blank Scheme" to create the first one.
+                  </div>
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
 
-                        <h3 style={{ marginBottom: "var(--sp-4)" }}>Eligibility Conditions</h3>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-4)", maxHeight: "35vh", overflowY: "auto", paddingRight: "var(--sp-2)" }}>
-                            {editingScheme.conditions.map((cond: any, i: number) => {
-                                const parsed = parseRule(cond.rule);
-                                return (
-                                    <div key={cond.id || i} style={{ border: "1px dashed var(--border)", padding: "var(--sp-4)", borderRadius: "var(--radius-md)", backgroundColor: "#fdfdfd" }}>
-                                        <div className="form-group" style={{ marginBottom: "var(--sp-2)" }}>
-                                            <input className="form-input" value={cond.label} onChange={e => {
-                                                const newConds = [...editingScheme.conditions];
-                                                newConds[i].label = e.target.value;
-                                                updateObj({ conditions: newConds });
-                                            }} placeholder="Human Readable Rule Explanation" />
-                                        </div>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: "var(--sp-2)", alignItems: "center" }}>
-                                            <select className="form-input" value={parsed.field} onChange={e => {
-                                                const newConds = [...editingScheme.conditions];
-                                                newConds[i].rule = buildRule(e.target.value, parsed.operator, String(parsed.value));
-                                                updateObj({ conditions: newConds });
-                                            }}>
-                                                <option value="state">State</option>
-                                                <option value="district">District</option>
-                                                <option value="annualIncome">Annual Income</option>
-                                                <option value="age">Age</option>
-                                                <option value="gender">Gender</option>
-                                                <option value="socialCategory">Social Category</option>
-                                                <option value="maritalStatus">Marital Status</option>
-                                            </select>
-                                            <select className="form-input" value={parsed.operator} onChange={e => {
-                                                const newConds = [...editingScheme.conditions];
-                                                newConds[i].rule = buildRule(parsed.field, e.target.value, String(parsed.value));
-                                                updateObj({ conditions: newConds });
-                                            }}>
-                                                <option value="==">is exactly (==)</option>
-                                                <option value="in">is one of (in)</option>
-                                                <option value="<=">is less than or equal (&lt;=)</option>
-                                                <option value=">=">is greater than or equal (&gt;=)</option>
-                                                <option value=">">is strictly greater (&gt;)</option>
-                                                <option value="<">is strictly less (&lt;)</option>
-                                            </select>
-                                            <input className="form-input" value={parsed.value} onChange={e => {
-                                                const newConds = [...editingScheme.conditions];
-                                                newConds[i].rule = buildRule(parsed.field, parsed.operator, e.target.value);
-                                                updateObj({ conditions: newConds });
-                                            }} placeholder="Value (comma separated if 'in')" />
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                            <button className="btn btn-secondary" onClick={() => {
-                                const newConds = [...editingScheme.conditions, { id: `c${Date.now()}`, label: "New Rule", rule: { "==": [{ var: "state" }, ""] } }];
-                                updateObj({ conditions: newConds });
-                            }}>+ Add Condition</button>
-                        </div>
+      <p style={{ marginTop: "var(--sp-4)", fontSize: "var(--fs-xs)", color: "var(--text-muted)" }}>
+        <strong>Maker-checker rule:</strong> Publish is disabled for any draft you created or edited. Another admin must review and publish it.
+      </p>
+    </main>
+  );
+}
 
-                        <div style={{ display: "flex", gap: "var(--sp-4)", marginTop: "var(--sp-6)", justifyContent: "flex-end" }}>
-                            <button className="btn btn-secondary" onClick={() => setEditingScheme(null)} disabled={saving}>Cancel</button>
-                            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                                {saving ? "Saving..." : "Save to Server"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </main>
-    );
+function shorten(s: string): string {
+  return s.length > 10 ? s.slice(0, 8) + "…" : s;
 }

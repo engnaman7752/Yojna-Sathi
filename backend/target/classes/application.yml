@@ -4,8 +4,24 @@ server:
 spring:
   application:
     name: yojana-saathi-backend
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Cognito user pool that issues our JWTs. The app fetches its JWKS at
+          # startup from ${issuer-uri}/.well-known/openid-configuration and
+          # verifies every request's Bearer token against those public keys.
+          # Override with COGNITO_ISSUER_URI env var in each environment.
+          issuer-uri: ${COGNITO_ISSUER_URI:https://cognito-idp.ap-south-1.amazonaws.com/ap-south-1_1vNMsa5WW}
 
 yojana:
+  dynamodb:
+    # Real DynamoDB in production (leave endpoint empty; SDK uses ECS task
+    # role credentials). Local dev points at dynamodb-local (port 8001 in
+    # docker-compose). Override with DDB_ENDPOINT env var.
+    region: ${YOJANA_DDB_REGION:ap-south-1}
+    endpoint: ${DDB_ENDPOINT:}
+    table: ${DDB_TABLE:YojanaSaathi}
   data:
     # Directory holding vocabulary.json and schemes/. Relative paths resolve
     # against the process working directory (run Maven from backend/).
