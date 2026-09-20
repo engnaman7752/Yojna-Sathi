@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app import context
+from app import config
 from app.agent.builder import build_agent
 from app.extraction.page_text import extract_pages
 from app.providers.models import chat_model
@@ -114,7 +115,7 @@ async def extract_scheme_rules_from_pdf(
             raise HTTPException(status_code=400, detail="Could not extract any readable text from the PDF.")
 
         # 3. Read Vocabulary for strict LLM constraint
-        vocabulary_path = context.config.VOCABULARY_PATH
+        vocabulary_path = config.VOCABULARY_PATH
         with open(vocabulary_path, "r", encoding="utf-8") as f:
             vocab = json.load(f)
             

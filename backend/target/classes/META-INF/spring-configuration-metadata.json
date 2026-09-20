@@ -9,13 +9,13 @@
       "name": "yojana.data",
       "type": "in.yojanasaathi.config.YojanaProperties$Data",
       "sourceType": "in.yojanasaathi.config.YojanaProperties",
-      "sourceMethod": "public in.yojanasaathi.config.YojanaProperties.Data data() "
+      "sourceMethod": "data()"
     },
     {
       "name": "yojana.eligibility",
       "type": "in.yojanasaathi.config.YojanaProperties$Eligibility",
       "sourceType": "in.yojanasaathi.config.YojanaProperties",
-      "sourceMethod": "public in.yojanasaathi.config.YojanaProperties.Eligibility eligibility() "
+      "sourceMethod": "eligibility()"
     }
   ],
   "properties": [
